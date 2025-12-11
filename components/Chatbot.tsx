@@ -94,7 +94,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ chatSession }) => {
     };
 
     const renderMessageContent = (message: ChatMessage) => {
-        const html = marked.parse(message.text);
+        const html = marked.parse(message.text, { async: false }) as string;
         return <div className="prose prose-sm prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
     };
 
