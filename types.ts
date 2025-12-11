@@ -32,7 +32,8 @@ const translations: Record<string, any> = {
             plugins: "Plugins",
             users: "Users",
             tools: "Tools",
-            settings: "Settings"
+            settings: "Settings",
+            ai: "AI Dashboard"
         },
         posts: {
             all: "All",
@@ -446,7 +447,8 @@ const translations: Record<string, any> = {
             plugins: "افزونه‌ها",
             users: "کاربران",
             tools: "ابزارها",
-            settings: "تنظیمات"
+            settings: "تنظیمات",
+            ai: "داشبورد هوش مصنوعی"
         },
         posts: {
             all: "همه",
@@ -863,7 +865,8 @@ const translations: Record<string, any> = {
             plugins: "الإضافات",
             users: "الأعضاء",
             tools: "الأدوات",
-            settings: "الإعدادات"
+            settings: "الإعدادات",
+            ai: "لوحة الذكاء الاصطناعي"
         },
         posts: {
             all: "الكل",

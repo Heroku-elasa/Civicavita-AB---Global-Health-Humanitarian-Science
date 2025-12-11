@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Page, useLanguage, BlogPost, Project } from '../types';
 import { useToast } from './Toast';
+import AIDashboard from './AIDashboard';
 
 interface DashboardPageProps {
     setPage: (page: Page) => void;
@@ -10,7 +11,7 @@ interface DashboardPageProps {
     featuredProjects: Project[];
 }
 
-type DashboardView = 'dashboard' | 'posts' | 'media' | 'pages' | 'comments' | 'appearance' | 'plugins' | 'users' | 'tools' | 'settings';
+type DashboardView = 'dashboard' | 'posts' | 'media' | 'pages' | 'comments' | 'appearance' | 'plugins' | 'users' | 'tools' | 'settings' | 'ai';
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ setPage, latestPosts, featuredProjects }) => {
     const { addToast } = useToast();
@@ -36,7 +37,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ setPage, latestPosts, fea
         { id: 'plugins', labelKey: 'dashboard.menu.plugins', icon: <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /> }, // Simplified icon
         { id: 'users', labelKey: 'dashboard.menu.users', icon: <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /> },
         { id: 'tools', labelKey: 'dashboard.menu.tools', icon: <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4z" /> }, // Simplified icon
-        { id: 'settings', labelKey: 'dashboard.menu.settings', icon: <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /> }
+        { id: 'settings', labelKey: 'dashboard.menu.settings', icon: <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /> },
+        { id: 'ai', labelKey: 'dashboard.menu.ai', icon: <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> }
     ];
 
     // Mock posts data based on user request
@@ -259,8 +261,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ setPage, latestPosts, fea
                         </div>
                     )}
 
+                    {/* --- AI Dashboard View --- */}
+                    {currentView === 'ai' && (
+                        <div className="bg-slate-900 rounded-lg -m-4 sm:-m-5 p-4 sm:p-5 min-h-full">
+                            <AIDashboard />
+                        </div>
+                    )}
+
                     {/* --- Placeholder Views for others --- */}
-                    {!['dashboard', 'posts'].includes(currentView) && (
+                    {!['dashboard', 'posts', 'ai'].includes(currentView) && (
                         <div className="text-center py-20">
                             <h2 className="text-2xl font-light text-[#50575e]">This section ({t(`dashboard.menu.${currentView}`)}) is under construction in this simulation.</h2>
                         </div>

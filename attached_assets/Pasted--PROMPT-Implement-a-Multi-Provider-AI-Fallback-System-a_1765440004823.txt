@@ -1,0 +1,317 @@
+# PROMPT: Implement a Multi-Provider AI Fallback System and AI API Management Dashboard
+
+## OBJECTIVE
+
+Upgrade all AI-powered features in the project by adding:
+
+1. **A multi-provider fallback system** that automatically switches between AI providers when one fails.
+2. **An AI API Management Dashboard** inside the website's admin panel (e.g., WordPress dashboard or equivalent), allowing administrators to:
+   * View all configured AI providers
+   * Add or remove API keys
+   * See API usage limits and quotas
+   * Enable/disable providers
+   * Adjust provider priority order
+   * Debug AI-related functions and error logs
+
+This prompt must apply to **any AI-generated website**.
+
+---
+
+## PROVIDER ORDER (Fallback Chain)
+
+1. **Primary Provider** – e.g., `gemini-2.5-flash`
+2. **Secondary Provider (via OpenRouter)** – e.g., `google/gemini-2.0-flash-001`
+3. **Cloudflare Workers AI** – e.g., `@cf/meta/llama-3.2-3b-instruct`
+4. **OpenAI** – e.g., `gpt-4o-mini`
+
+*The system should allow reordering or replacing these through the admin dashboard.*
+
+---
+
+## REQUIRED ENVIRONMENT VARIABLES
+
+The prompt must ensure the following environment variables (or similar) are set:
+
+* `GEMINI_API_KEY`
+* `OPENROUTER_API_KEY`
+* `CLOUDFLARE_ACCOUNT_ID`
+* `CLOUDFLARE_API_TOKEN`
+* `OPENAI_API_KEY`
+
+These should be manageable through the Admin AI Dashboard when possible.
+
+---
+
+## IMPLEMENTATION STEPS
+
+### Step 1: Add Shared Types and Interfaces
+
+Add the unified provider interfaces to the main AI service file:
+
+interface AIProvider {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  apiKeyEnvVar: string;
+  endpoint: string;
+  model: string;
+  limits: {
+    requestsPerMinute: number;
+    requestsPerDay: number;
+    tokensPerMinute: number;
+  };
+  usage: {
+    requestsToday: number;
+    tokensToday: number;
+    lastUsed: Date | null;
+    lastError: string | null;
+  };
+  call: (
+    prompt: string,
+    maxTokens: number,
+    temperature: number
+  ) => Promise<string>;
+}
+
+interface FallbackConfig {
+  maxTokens: number;
+  temperature: number;
+  providers?: AIProvider[];
+}
+
+interface AILog {
+  id: string;
+  timestamp: Date;
+  provider: string;
+  function: string;
+  status: 'success' | 'error' | 'fallback';
+  duration: number;
+  tokens: number;
+  error?: string;
+}
+
+---
+
+### Step 2: Create Admin AI Dashboard
+
+The dashboard should include the following sections:
+
+#### 2.1 Provider Management Panel
+- List all configured AI providers with status indicators
+- Toggle switches to enable/disable each provider
+- Drag-and-drop to reorder provider priority
+- "Add New Provider" button with form:
+  - Provider name
+  - API endpoint URL
+  - Model name
+  - API key (stored securely)
+  - Rate limits configuration
+
+#### 2.2 API Key Management
+- Secure input fields for each provider's API key
+- "Test Connection" button for each provider
+- Last validation status and timestamp
+- Masked display of current keys (show last 4 characters only)
+
+#### 2.3 Usage & Limits Dashboard
+| Provider | Requests Today | Daily Limit | Tokens Used | Status |
+|----------|----------------|-------------|-------------|--------|
+| Gemini   | 450            | 1,500       | 125,000     | Active |
+| OpenRouter | 12           | 50          | 8,500       | Active |
+| Cloudflare | 45           | 130         | 22,000      | Active |
+| OpenAI   | 0              | Unlimited   | 0           | Standby |
+
+- Progress bars showing usage percentage
+- Alerts when approaching limits (80%, 95%, 100%)
+- Reset time countdown for each provider
+
+#### 2.4 AI Function Registry
+| Function Name | Last Called | Provider Used | Avg Response Time | Status |
+|---------------|-------------|---------------|-------------------|--------|
+| generateChatResponse | 2 min ago | Gemini | 1.2s | OK |
+| analyzeContract | 15 min ago | Gemini | 3.5s | OK |
+| findLawyers | 1 hr ago | OpenRouter | 2.1s | OK |
+
+- Click function name to see detailed logs
+- Filter by status, provider, or date range
+
+#### 2.5 Debug Console
+- Real-time log viewer with filtering:
+  - Filter by: All | Errors | Warnings | Info
+  - Filter by provider
+  - Filter by function
+  - Date/time range selector
+- Log entry format:
+  [2024-12-11 14:32:15] [INFO] [Gemini] generateChatResponse - Success (1.2s, 450 tokens)
+  [2024-12-11 14:32:18] [ERROR] [Gemini] analyzeContract - Rate limit exceeded
+  [2024-12-11 14:32:19] [INFO] [OpenRouter] analyzeContract - Fallback success (2.1s)
+- Export logs as CSV/JSON
+- Clear logs button (with confirmation)
+
+#### 2.6 Test & Diagnostic Tools
+- "Test All Providers" button - runs health check on all APIs
+- "Test Specific Function" dropdown - test any AI function manually
+- Input field for test prompt
+- Response preview with timing and token count
+- Fallback simulation mode (force primary to fail)
+
+---
+
+### Step 3: Database Schema for Dashboard
+
+// For storing provider configurations
+CREATE TABLE ai_providers (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  enabled BOOLEAN DEFAULT true,
+  priority INT DEFAULT 0,
+  endpoint VARCHAR(255),
+  model VARCHAR(100),
+  api_key_env_var VARCHAR(100),
+  requests_per_minute INT DEFAULT 15,
+  requests_per_day INT DEFAULT 1500,
+  tokens_per_minute INT DEFAULT 1000000,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+// For tracking usage
+CREATE TABLE ai_usage (
+  id SERIAL PRIMARY KEY,
+  provider_id VARCHAR(50) REFERENCES ai_providers(id),
+  date DATE DEFAULT CURRENT_DATE,
+  requests_count INT DEFAULT 0,
+  tokens_count INT DEFAULT 0,
+  errors_count INT DEFAULT 0,
+  UNIQUE(provider_id, date)
+);
+
+// For logging
+CREATE TABLE ai_logs (
+  id SERIAL PRIMARY KEY,
+  timestamp TIMESTAMP DEFAULT NOW(),
+  provider_id VARCHAR(50),
+  function_name VARCHAR(100),
+  status VARCHAR(20), -- 'success', 'error', 'fallback'
+  duration_ms INT,
+  tokens_used INT,
+  error_message TEXT,
+  request_preview TEXT,
+  response_preview TEXT
+);
+
+---
+
+### Step 4: Backend API Endpoints for Dashboard
+
+// Provider Management
+GET    /api/admin/ai/providers        - List all providers
+POST   /api/admin/ai/providers        - Add new provider
+PUT    /api/admin/ai/providers/:id    - Update provider
+DELETE /api/admin/ai/providers/:id    - Remove provider
+POST   /api/admin/ai/providers/:id/test - Test provider connection
+PUT    /api/admin/ai/providers/reorder - Update priority order
+
+// Usage & Stats
+GET    /api/admin/ai/usage            - Get usage statistics
+GET    /api/admin/ai/usage/:providerId - Get provider-specific usage
+
+// Logs
+GET    /api/admin/ai/logs             - Get logs (with pagination/filters)
+DELETE /api/admin/ai/logs             - Clear logs
+GET    /api/admin/ai/logs/export      - Export logs as CSV/JSON
+
+// Diagnostics
+POST   /api/admin/ai/test-function    - Test specific AI function
+POST   /api/admin/ai/health-check     - Run health check on all providers
+
+---
+
+### Step 5: WordPress Integration (if applicable)
+
+For WordPress sites, add a custom admin menu:
+
+// Add to functions.php or custom plugin
+add_action('admin_menu', function() {
+  add_menu_page(
+    'AI Dashboard',           // Page title
+    'AI Dashboard',           // Menu title
+    'manage_options',         // Capability
+    'ai-dashboard',           // Menu slug
+    'render_ai_dashboard',    // Callback function
+    'dashicons-admin-generic', // Icon
+    30                        // Position
+  );
+  
+  add_submenu_page('ai-dashboard', 'Providers', 'Providers', 'manage_options', 'ai-providers', 'render_providers_page');
+  add_submenu_page('ai-dashboard', 'Usage', 'Usage', 'manage_options', 'ai-usage', 'render_usage_page');
+  add_submenu_page('ai-dashboard', 'Logs', 'Logs', 'manage_options', 'ai-logs', 'render_logs_page');
+  add_submenu_page('ai-dashboard', 'Debug', 'Debug', 'manage_options', 'ai-debug', 'render_debug_page');
+});
+
+---
+
+### Step 6: Security Considerations
+
+1. **Authentication**: Dashboard accessible only to admin users
+2. **API Key Storage**: Store keys encrypted, never in plain text
+3. **Rate Limiting**: Prevent abuse of test endpoints
+4. **Audit Trail**: Log all admin actions (key changes, provider toggles)
+5. **Input Validation**: Sanitize all inputs before processing
+6. **CORS**: Restrict API endpoints to same-origin requests
+
+---
+
+## EXPECTED DASHBOARD FEATURES
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| Provider List | View all AI providers with status | High |
+| Enable/Disable Toggle | Turn providers on/off | High |
+| Priority Reorder | Drag-drop to change fallback order | High |
+| API Key Management | Add/edit/remove API keys securely | High |
+| Usage Stats | Real-time usage vs limits | High |
+| Error Logs | View recent errors with details | High |
+| Test Connection | Verify API key works | Medium |
+| Function Registry | See all AI functions and their status | Medium |
+| Export Logs | Download logs for analysis | Medium |
+| Debug Console | Real-time log streaming | Medium |
+| Usage Alerts | Notifications when approaching limits | Low |
+| Historical Charts | Usage trends over time | Low |
+
+---
+
+## IMPLEMENTATION PRIORITY
+
+1. **Phase 1 (Core)**
+   - Provider list with enable/disable
+   - API key management
+   - Basic usage stats
+
+2. **Phase 2 (Monitoring)**
+   - Error logs viewer
+   - Function registry
+   - Test connection feature
+
+3. **Phase 3 (Advanced)**
+   - Debug console
+   - Export functionality
+   - Historical charts
+   - Usage alerts
+
+---
+
+## TESTING CHECKLIST
+
+After implementation, verify:
+- [ ] Dashboard loads correctly for admin users
+- [ ] Non-admin users cannot access dashboard
+- [ ] Providers can be enabled/disabled
+- [ ] Priority order can be changed
+- [ ] API keys can be added/updated securely
+- [ ] Usage stats update in real-time
+- [ ] Logs display correctly with filters
+- [ ] Test connection works for all providers
+- [ ] Fallback system respects dashboard settings
+- [ ] All CRUD operations work correctly

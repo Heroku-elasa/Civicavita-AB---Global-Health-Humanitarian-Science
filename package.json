@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:all": "tsx server/index.ts & vite",
+    "server": "tsx server/index.ts",
     "build": "vite build",
     "preview": "vite preview",
     "db:generate": "drizzle-kit generate",
@@ -14,14 +16,21 @@
   },
   "dependencies": {
     "@google/genai": "^1.19.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/pg": "^8.16.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
     "html-to-docx": "^1.8.0",
     "marked": "^16.2.1",
+    "openai": "^6.10.0",
     "pg": "^8.16.3",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
