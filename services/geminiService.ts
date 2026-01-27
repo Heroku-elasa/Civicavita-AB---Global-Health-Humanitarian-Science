@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Type, GenerateContentResponse, Chat, Modality } from "@google/genai";
 import { Grant, GrantSummary, VideoScene, PlantingAnalysis, RiskItem, VideoScript, PublishingStrategy, VideoTool } from "../types";
 
@@ -48,7 +46,7 @@ You MUST integrate the following three core knowledge modules into your response
 `;
 
     const chat: Chat = ai.chats.create({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         config: {
             systemInstruction,
         },
@@ -69,14 +67,12 @@ export const generateReport = async (topic: string, description: string, reportT
         IMPORTANT: The ENTIRE output must be written in ${targetLanguage}.
     `;
 
-    // Use ai.models.generateContent
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
     });
     
-    // Extract text using response.text
-    return response.text;
+    return response.text || "No content generated.";
 };
 
 export const findGrants = async (keywords: string, targetLanguage: string = 'English'): Promise<Grant[]> => {
@@ -92,9 +88,8 @@ export const findGrants = async (keywords: string, targetLanguage: string = 'Eng
         The output must be a valid JSON array. Ensure values for 'grantTitle' and 'summary' are in ${targetLanguage}.
     `;
     
-    // Use ai.models.generateContent with responseSchema for JSON output
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -115,8 +110,7 @@ export const findGrants = async (keywords: string, targetLanguage: string = 'Eng
         }
     });
 
-    // Extract text and parse JSON
-    const jsonStr = response.text.trim();
+    const jsonStr = response.text?.trim() || "[]";
     return JSON.parse(jsonStr);
 };
 
@@ -136,7 +130,7 @@ export const findReforestationGrants = async (projectDescription: string, target
     `;
     
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -157,7 +151,7 @@ export const findReforestationGrants = async (projectDescription: string, target
         }
     });
 
-    const jsonStr = response.text.trim();
+    const jsonStr = response.text?.trim() || "[]";
     return JSON.parse(jsonStr);
 };
 
@@ -177,41 +171,39 @@ export const analyzePlantingLocation = async (location: string, targetLanguage: 
     `;
     
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro', // Using a more powerful model for complex analysis
+        model: 'gemini-3-pro-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                    plantingSuggestion: { type: Type.STRING, description: "Detailed suggestion for planting in this location." },
-                    vegetationAnalysis: { type: Type.STRING, description: "Analysis of current vegetation and need for trees." },
+                    plantingSuggestion: { type: Type.STRING },
+                    vegetationAnalysis: { type: Type.STRING },
                     riskAnalysis: {
                         type: Type.ARRAY,
-                        description: "List of potential risks.",
                         items: {
                             type: Type.OBJECT,
                             properties: {
                                 name: { type: Type.STRING, enum: ['regulatory', 'climate', 'ecological'] },
-                                warningPercentage: { type: Type.INTEGER, description: "A risk score from 0 to 100." },
-                                description: { type: Type.STRING, description: "Explanation of the risk." }
+                                warningPercentage: { type: Type.INTEGER },
+                                description: { type: Type.STRING }
                             },
                              required: ["name", "warningPercentage", "description"]
                         }
                     },
                     suggestedTrees: {
                         type: Type.ARRAY,
-                        description: "List of suitable native tree species.",
                         items: { type: Type.STRING }
                     },
-                    crowdfundingPitch: { type: Type.STRING, description: "A compelling pitch for a crowdfunding campaign." }
+                    crowdfundingPitch: { type: Type.STRING }
                 },
                 required: ["plantingSuggestion", "vegetationAnalysis", "riskAnalysis", "suggestedTrees", "crowdfundingPitch"]
             }
         }
     });
     
-    const jsonStr = response.text.trim();
+    const jsonStr = response.text?.trim() || "{}";
     return JSON.parse(jsonStr);
 };
 
@@ -230,7 +222,7 @@ export const analyzeGrant = async (grant: Grant, userProfile: string, targetLang
         Deadline: ${grant.deadline}
         Link: ${grant.link}
 
-        Extract the following information from the grant's website (use search if needed from the link) and provide a relevance score.
+        Extract the relevant information and provide a relevance score.
         
         CRITICAL: Translate all textual fields (except links and numbers) to ${targetLanguage}.
 
@@ -244,11 +236,11 @@ export const analyzeGrant = async (grant: Grant, userProfile: string, targetLang
         - scope
         - howToApply
         - contact
-        - relevancePercentage: A score from 0 to 100 indicating how relevant this grant is to my profile.
+        - relevancePercentage: 0-100 score.
     `;
     
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -272,24 +264,24 @@ export const analyzeGrant = async (grant: Grant, userProfile: string, targetLang
         }
     });
     
-    const jsonStr = response.text.trim();
+    const jsonStr = response.text?.trim() || "{}";
     return JSON.parse(jsonStr);
 };
 
 type ScriptScene = Omit<VideoScene, 'videoUrls' | 'imageUrl' | 'isGenerating' | 'isApproved' | 'error'>;
 
 export const generateVideoScript = async (prompt: string, image: string | null, duration: number, videoType: string, targetLanguage: string = 'English'): Promise<ScriptScene[]> => {
-    const systemInstruction = `You are a creative video scriptwriter. Your task is to generate a script for a short video based on a user's prompt. The script should be broken down into scenes. For each scene, provide a concise narration and a detailed description of the visuals. The total number of scenes should be appropriate for a ${duration}-second video (approximately one scene per 5-7 seconds). 
+    const systemInstruction = `You are a creative video scriptwriter. Your task is to generate a script for a short video based on a user's prompt. The script should be broken down into scenes. For each scene, provide a concise narration and a detailed description of the visuals.
     
-    IMPORTANT: The 'narration' MUST be written in ${targetLanguage}. The 'description' for the visuals should be in English (for the image generator), but if the user asked for specific text overlays, mention them.`;
+    IMPORTANT: The 'narration' MUST be written in ${targetLanguage}. The 'description' for the visuals should be in English.`;
     
-    let userPrompt = `Video Topic: ${prompt}\nVideo Type: ${videoType}`;
+    let userPrompt = `Video Topic: ${prompt}\nVideo Type: ${videoType}\nDuration: ${duration}s`;
     if (image) {
         userPrompt += "\nAn image has been provided as inspiration.";
     }
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: userPrompt,
         config: {
             systemInstruction,
@@ -299,9 +291,9 @@ export const generateVideoScript = async (prompt: string, image: string | null, 
                 items: {
                     type: Type.OBJECT,
                     properties: {
-                        id: { type: Type.STRING, description: "A unique ID for the scene, e.g., 'scene_1'" },
-                        narration: { type: Type.STRING, description: "The voiceover narration for this scene." },
-                        description: { type: Type.STRING, description: "A detailed visual description for the AI video/image generator." },
+                        id: { type: Type.STRING },
+                        narration: { type: Type.STRING },
+                        description: { type: Type.STRING },
                     },
                     required: ["id", "narration", "description"],
                 }
@@ -309,42 +301,37 @@ export const generateVideoScript = async (prompt: string, image: string | null, 
         }
     });
     
-    const jsonStr = response.text.trim();
+    const jsonStr = response.text?.trim() || "[]";
     return JSON.parse(jsonStr);
 };
 
 export const generateBlogPostWithImages = async (title: string, content: string, tone: string, targetLanguage: string = 'English'): Promise<string> => {
     const blogGenerationPrompt = `
         Based on the following title, content, and desired tone, generate a complete blog post in Markdown format.
-        The blog post should be well-structured, engaging, and ready for publication.
         
         CRITICAL: The entire blog post must be written in ${targetLanguage}.
 
-        Crucially, you must insert exactly three placeholders in the text: [IMAGE_1] at the beginning (after the intro), [IMAGE_2] in the middle, and [IMAGE_3] towards the end (before the conclusion).
-        Also, provide three visually descriptive prompts for an AI image generator that correspond to these placeholders and match the blog's content and tone (Keep image prompts in English for best results).
+        Placeholders: [IMAGE_1], [IMAGE_2], and [IMAGE_3].
+        Also provide three English image prompts.
 
         Title: "${title}"
         Content/Outline: "${content}"
         Tone: "${tone}"
 
-        Return a JSON object with two keys: "blogContent" (the full markdown text in ${targetLanguage}) and "imagePrompts" (an array of three string prompts in English).
+        Return JSON with "blogContent" and "imagePrompts" (array of 3 strings).
     `;
 
     const blogResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: blogGenerationPrompt,
         config: {
             responseMimeType: "application/json",
             responseSchema: {
                 type: Type.OBJECT,
                 properties: {
-                    blogContent: { 
-                        type: Type.STRING,
-                        description: "The full blog post in Markdown format with placeholders [IMAGE_1], [IMAGE_2], and [IMAGE_3]."
-                    },
+                    blogContent: { type: Type.STRING },
                     imagePrompts: {
                         type: Type.ARRAY,
-                        description: "An array of three detailed, visually rich prompts for an image generator.",
                         items: { type: Type.STRING }
                     }
                 },
@@ -353,11 +340,11 @@ export const generateBlogPostWithImages = async (title: string, content: string,
         }
     });
 
-    const blogData = JSON.parse(blogResponse.text.trim());
+    const blogData = JSON.parse(blogResponse.text?.trim() || "{}");
     let { blogContent, imagePrompts } = blogData;
 
     if (!Array.isArray(imagePrompts) || imagePrompts.length < 3) {
-        throw new Error("AI did not return at least three image prompts as expected.");
+        return blogContent || "Failed to generate blog content.";
     }
     
     const promptsToGenerate = imagePrompts.slice(0, 3);
@@ -367,9 +354,6 @@ export const generateBlogPostWithImages = async (title: string, content: string,
             model: 'gemini-2.5-flash-image',
             contents: {
                 parts: [{ text: prompt }],
-            },
-            config: {
-                responseModalities: [Modality.IMAGE],
             },
         })
     );
@@ -387,27 +371,24 @@ export const generateBlogPostWithImages = async (title: string, content: string,
                 }
             }
         }
-        throw new Error("No image data found in one of the responses.");
+        return "https://via.placeholder.com/800x450?text=Image+Generation+Failed";
     });
 
     blogContent = blogContent
-        .replace('[IMAGE_1]', `\n![${promptsToGenerate[0]}](${imageUrls[0]})\n`)
-        .replace('[IMAGE_2]', `\n![${promptsToGenerate[1]}](${imageUrls[1]})\n`)
-        .replace('[IMAGE_3]', `\n![${promptsToGenerate[2]}](${imageUrls[2]})\n`);
+        .replace('[IMAGE_1]', `\n![Image 1](${imageUrls[0]})\n`)
+        .replace('[IMAGE_2]', `\n![Image 2](${imageUrls[1]})\n`)
+        .replace('[IMAGE_3]', `\n![Image 3](${imageUrls[2]})\n`);
         
     return blogContent;
 };
 
 export const generateImageForPost = async (title: string): Promise<string> => {
-    const prompt = `A high-quality, professional photo representing the theme of a blog post titled: "${title}". The image should be suitable for a scientific and humanitarian organization's website. Photorealistic, clean, and impactful, 16:9 aspect ratio.`;
+    const prompt = `A professional, thematic high-quality 16:9 photo representing: "${title}". Suitable for a humanitarian/scientific organization website. Realistic, clean, evocative.`;
     
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
             parts: [{ text: prompt }],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE],
         },
     });
 
@@ -422,19 +403,16 @@ export const generateImageForPost = async (title: string): Promise<string> => {
         }
     }
     
-    throw new Error("No image was generated.");
+    throw new Error("No image data returned from AI service.");
 };
 
 export const generateImageForProject = async (title: string): Promise<string> => {
-    const prompt = `A professional, high-quality, photorealistic image representing a humanitarian or scientific project titled: "${title}". The style should be suitable for a research and consultancy firm's portfolio. The image should be impactful and visually compelling, conveying innovation and global reach. Avoid text or logos. Aspect ratio 16:9.`;
+    const prompt = `A high-quality 16:9 photorealistic image representing a scientific research or humanitarian project titled: "${title}". Focus on innovation, impact, and global reach. Clean and professional.`;
     
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
             parts: [{ text: prompt }],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE],
         },
     });
 
@@ -449,16 +427,16 @@ export const generateImageForProject = async (title: string): Promise<string> =>
         }
     }
     
-    throw new Error("No image was generated.");
+    throw new Error("No image data returned from AI service.");
 };
 
 
 export const askGoogleBabaAboutImage = async (image: {data: string, mimeType: string}, userFocus?: string, targetLanguage: string = 'English'): Promise<GrantResult> => {
-    const textPart = { text: `Analyze this image. The user is particularly interested in: "${userFocus || 'General information, context, and potential opportunities related to the image.'}". Use Google Search to find relevant, up-to-date information, including potential grant opportunities, research collaborations, or relevant news. Provide web sources. Output the textual analysis in ${targetLanguage}.` };
+    const textPart = { text: `Analyze this image. Interest: "${userFocus || 'General information'}". Use Google Search. Output in ${targetLanguage}.` };
     const imagePart = { inlineData: image };
 
     const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: { parts: [imagePart, textPart] },
         config: {
             tools: [{ googleSearch: {} }],
@@ -469,18 +447,15 @@ export const askGoogleBabaAboutImage = async (image: {data: string, mimeType: st
     const sources = groundingChunks.map(chunk => chunk.web).filter(s => s) as { uri: string; title: string }[];
     
     return {
-        text: response.text,
+        text: response.text || "Analysis complete.",
         sources: sources.map(s => ({ web: s })),
     };
 };
 
 export const generateSceneVideo = async (description: string): Promise<string[]> => {
-    // This is a placeholder as video generation is a long-running operation.
-    // In a real app, this would initiate an operation and poll for results.
-    console.log("Generating video for:", description);
-    await new Promise(res => setTimeout(res, 3000)); // Simulate network delay
-    // Returning a placeholder URL
-    return [`/videos/placeholder.mp4`];
+    console.log("Generating video placeholder for:", description);
+    await new Promise(res => setTimeout(res, 2000));
+    return [`https://storage.googleapis.com/civicavita-assets/placeholder-scene.mp4`];
 };
 
 export const generateSceneImage = async (description: string): Promise<string> => {
@@ -488,9 +463,6 @@ export const generateSceneImage = async (description: string): Promise<string> =
         model: 'gemini-2.5-flash-image',
         contents: {
             parts: [{ text: description }],
-        },
-        config: {
-            responseModalities: [Modality.IMAGE],
         },
     });
 
@@ -505,31 +477,24 @@ export const generateSceneImage = async (description: string): Promise<string> =
         }
     }
     
-    throw new Error("No image was generated.");
+    throw new Error("Failed to generate scene image.");
 };
 
 export const generateMusicDescription = async (prompt: string, targetLanguage: string = 'English'): Promise<string> => {
      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Describe a suitable background music track for a video with the following theme: "${prompt}". Describe the mood, instruments, and tempo. Output in ${targetLanguage}.`,
+        model: 'gemini-3-flash-preview',
+        contents: `Describe suitable background music for: "${prompt}". Output in ${targetLanguage}.`,
     });
-    return response.text;
+    return response.text || "No music description available.";
 };
 
 // --- Content Hub Services ---
 
 export const generateVideoConcept = async (topic: string, platform: string, language: string): Promise<VideoScript> => {
-    const prompt = `Create a short vertical video script (Reels/TikTok style) about "${topic}" for ${platform} in ${language}. 
-    Return a JSON object with: 
-    - title: catchy title in ${language}
-    - hook: first 3 seconds text in ${language}
-    - scenes: array of { timecode, visual, voiceover, emotion, audio_cues } where text is in ${language}
-    - cta: Call to Action in ${language}
-    - caption: post caption in ${language}
-    - hashtags: array of strings`;
+    const prompt = `Create a vertical video script about "${topic}" for ${platform} in ${language}. Return JSON.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -559,19 +524,15 @@ export const generateVideoConcept = async (topic: string, platform: string, lang
         }
     });
 
-    return JSON.parse(response.text.trim());
+    const jsonStr = response.text?.trim() || "{}";
+    return JSON.parse(jsonStr);
 };
 
 export const getPublishingStrategy = async (topic: string, platform: string, language: string): Promise<PublishingStrategy> => {
-    const prompt = `Analyze the best publishing strategy for a post about "${topic}" on ${platform} targeting a ${language} speaking audience.
-    Return JSON with:
-    - bestTime: Best time of day to post (e.g. "Tuesday 5 PM") in ${language}
-    - reasoning: Why this time is best in ${language}
-    - algorithmTip: A tip to boost reach in ${language}
-    - nextPostIdea: A follow-up post idea in ${language}`;
+    const prompt = `Publishing strategy for "${topic}" on ${platform} for ${language} audience. Return JSON.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -587,20 +548,15 @@ export const getPublishingStrategy = async (topic: string, platform: string, lan
         }
     });
 
-    return JSON.parse(response.text.trim());
+    const jsonStr = response.text?.trim() || "{}";
+    return JSON.parse(jsonStr);
 };
 
 export const findBestVideoTools = async (language: string): Promise<VideoTool[]> => {
-    const prompt = `List 3 top AI video generation tools suitable for creating content in ${language}.
-    Return a JSON array of objects with:
-    - name: Tool name
-    - cost: Free/Paid (in ${language})
-    - farsiSupport: "Yes"/"No" (in ${language})
-    - features: Short description of key features (in ${language})
-    - qualityRating: "High"/"Medium" (in ${language})`;
+    const prompt = `List 3 top AI video tools for ${language} content. Return JSON array.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             responseMimeType: "application/json",
@@ -620,5 +576,6 @@ export const findBestVideoTools = async (language: string): Promise<VideoTool[]>
         }
     });
 
-    return JSON.parse(response.text.trim());
+    const jsonStr = response.text?.trim() || "[]";
+    return JSON.parse(jsonStr);
 };

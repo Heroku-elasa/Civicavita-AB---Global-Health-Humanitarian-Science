@@ -6,16 +6,8 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: 5000,
+        port: 3000,
         host: '0.0.0.0',
-        allowedHosts: true,
-        strictPort: true,
-        proxy: {
-          '/api': {
-            target: 'http://localhost:3001',
-            changeOrigin: true,
-          },
-        },
       },
       plugins: [react()],
       define: {

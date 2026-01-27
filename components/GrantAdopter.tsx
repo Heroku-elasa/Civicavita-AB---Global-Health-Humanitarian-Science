@@ -1,8 +1,8 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Grant, GrantSummary } from '../types';
 import { useLanguage } from '../types';
 import { SkeletonLoader } from './SkeletonLoader';
+import { useToast } from './Toast';
 
 interface GrantAdopterProps {
     grant: Grant;
@@ -11,6 +11,7 @@ interface GrantAdopterProps {
     error: string | null;
     onClear: () => void;
     onPrepareProposal: (grant: Grant) => void;
+    onSearchRelated: (keywords: string) => void;
 }
 
 const SummaryItem: React.FC<{ label: string; value: string | undefined }> = ({ label, value }) => (
@@ -38,8 +39,52 @@ const RelevanceBadge: React.FC<{ score: number }> = ({ score }) => {
 };
 
 
-const GrantAdopter: React.FC<GrantAdopterProps> = ({ grant, isAnalyzing, result, error, onClear, onPrepareProposal }) => {
+const GrantAdopter: React.FC<GrantAdopterProps> = ({ grant, isAnalyzing, result, error, onClear, onPrepareProposal, onSearchRelated }) => {
     const { t } = useLanguage();
+    const { addToast } = useToast();
+    const [isSaved, setIsSaved] = useState(false);
+    
+    // Check if current grant is already saved on load or result change
+    useEffect(() => {
+        if (!result) return;
+        const savedData = localStorage.getItem('civicavita_saved_analyses');
+        if (savedData) {
+            const savedAnalyses = JSON.parse(savedData);
+            if (savedAnalyses[grant.link]) {
+                setIsSaved(true);
+            } else {
+                setIsSaved(false);
+            }
+        }
+    }, [grant.link, result]);
+
+    const handleSaveLocal = () => {
+        if (!result) return;
+        
+        try {
+            const savedData = localStorage.getItem('civicavita_saved_analyses') || '{}';
+            const savedAnalyses = JSON.parse(savedData);
+            
+            if (isSaved) {
+                delete savedAnalyses[grant.link];
+                setIsSaved(false);
+                addToast("Analysis removed from workspace", "info");
+            } else {
+                savedAnalyses[grant.link] = {
+                    grant,
+                    summary: result,
+                    savedAt: new Date().toISOString()
+                };
+                setIsSaved(true);
+                addToast("Analysis saved to workspace", "success");
+            }
+            
+            localStorage.setItem('civicavita_saved_analyses', JSON.stringify(savedAnalyses));
+        } catch (e) {
+            console.error("Storage error:", e);
+            addToast("Failed to save analysis", "error");
+        }
+    };
     
     const createHtmlForExport = (summary: GrantSummary): string => {
         const content = `
@@ -119,6 +164,16 @@ const GrantAdopter: React.FC<GrantAdopterProps> = ({ grant, isAnalyzing, result,
         }
     };
 
+    const handleSearchRelated = () => {
+        if (result) {
+            // Use title and scope to find related grants
+            const keywords = `${result.grantTitle} ${result.scope.split(' ').slice(0, 5).join(' ')}`;
+            onSearchRelated(keywords);
+        } else {
+            onSearchRelated(grant.grantTitle);
+        }
+    };
+
     return (
         <section id="grant-analyzer" className="py-12 sm:py-16 animate-fade-in">
             <div className="bg-slate-900/60 rounded-lg shadow-lg backdrop-blur-sm border border-slate-700">
@@ -127,9 +182,18 @@ const GrantAdopter: React.FC<GrantAdopterProps> = ({ grant, isAnalyzing, result,
                         <svg className="h-5 w-5 mx-2 text-teal-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
                         {t('grantAnalyzer.title')}: <span className="ml-2 font-normal text-gray-300 truncate">{grant.grantTitle}</span>
                     </h3>
-                    <button onClick={onClear} className="p-1 text-gray-400 hover:text-white transition-colors" title={t('grantAnalyzer.close')}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={handleSearchRelated}
+                            className="hidden sm:flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-teal-400 border border-teal-500/30 rounded-full hover:bg-teal-500/10 transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>
+                            View Related Grants
+                        </button>
+                        <button onClick={onClear} className="p-1 text-gray-400 hover:text-white transition-colors" title={t('grantAnalyzer.close')}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="p-6">
@@ -176,6 +240,16 @@ const GrantAdopter: React.FC<GrantAdopterProps> = ({ grant, isAnalyzing, result,
                                     </a>
                                 </div>
                                 <div className="flex space-x-2 flex-shrink-0">
+                                    <button 
+                                        onClick={handleSaveLocal} 
+                                        className={`px-3 py-2 rounded-md transition-all flex items-center gap-2 border ${isSaved ? 'bg-pink-600 border-pink-500 text-white' : 'bg-slate-700 border-slate-600 text-gray-300 hover:bg-slate-600'}`} 
+                                        title={isSaved ? "Saved to Workspace" : "Save for later"}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 ${isSaved ? 'fill-current' : 'fill-none'}`} viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                        <span className="text-xs font-bold uppercase hidden sm:inline">{isSaved ? "Saved" : "Save"}</span>
+                                    </button>
                                     <button onClick={handleDownloadDOCX} className="px-3 py-2 bg-slate-700 text-white text-sm rounded-md hover:bg-slate-600 transition-colors" title={t('grantAnalyzer.exportDOCX')}>
                                         <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
                                     </button>
@@ -196,7 +270,14 @@ const GrantAdopter: React.FC<GrantAdopterProps> = ({ grant, isAnalyzing, result,
                                     <SummaryItem label={t('grantAnalyzer.contact')} value={result.contact} />
                                 </dl>
                             </div>
-                            <div className="mt-6 pt-6 border-t border-slate-700">
+                            <div className="mt-6 pt-6 border-t border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <button
+                                    onClick={handleSearchRelated}
+                                    className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-teal-500 text-teal-400 rounded-md shadow-sm text-sm font-medium hover:bg-teal-500/10 transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>
+                                    View Related Grants
+                                </button>
                                 <button
                                     onClick={() => onPrepareProposal(grant)}
                                     className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-pink-500 transition-colors"

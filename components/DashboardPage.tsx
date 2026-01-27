@@ -1,290 +1,292 @@
-
-
-import React, { useState } from 'react';
-import { Page, useLanguage, BlogPost, Project } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Page, useLanguage, BlogPost, Project, SQLTable, MySQLStatus } from '../types';
 import { useToast } from './Toast';
-import AIDashboard from './AIDashboard';
 
 interface DashboardPageProps {
     setPage: (page: Page) => void;
     latestPosts: BlogPost[];
     featuredProjects: Project[];
+    onGenerateImage: (type: 'post' | 'project' | 'media', index: number) => void;
 }
 
-type DashboardView = 'dashboard' | 'posts' | 'media' | 'pages' | 'comments' | 'appearance' | 'plugins' | 'users' | 'tools' | 'settings' | 'ai';
+type DashboardView = 'dashboard' | 'posts' | 'media' | 'pages' | 'comments' | 'appearance' | 'plugins' | 'users' | 'tools' | 'settings' | 'cpt_projects' | 'database';
+type PostStatus = 'Published' | 'Draft' | 'Trash';
 
-const DashboardPage: React.FC<DashboardPageProps> = ({ setPage, latestPosts, featuredProjects }) => {
+interface MockPost {
+    id: number;
+    title: string;
+    author: string;
+    date: string;
+    status: PostStatus;
+    type?: 'post' | 'page' | 'project';
+}
+
+const DashboardPage: React.FC<DashboardPageProps> = ({ setPage, latestPosts, featuredProjects, onGenerateImage }) => {
     const { addToast } = useToast();
     const { t, language } = useLanguage();
     const [currentView, setCurrentView] = useState<DashboardView>('dashboard');
-    const [draftTitle, setDraftTitle] = useState('');
-    const [draftContent, setDraftContent] = useState('');
+    const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+    
+    // Interactive States
+    const [mysqlStatus, setMysqlStatus] = useState<MySQLStatus>('Syncing');
+    const [sqlTables, setSqlTables] = useState<SQLTable[]>([
+        { name: 'sosobel_reports', rows: 42, lastUpdated: '2024-05-20 14:02', columns: ['id', 'title', 'content', 'type', 'created_at'] },
+        { name: 'sosobel_users', rows: 120, lastUpdated: '2024-05-19 09:15', columns: ['uid', 'username', 'email', 'role', 'last_login'] },
+        { name: 'sosobel_grants', rows: 15, lastUpdated: '2024-05-20 11:30', columns: ['grant_id', 'body', 'amount', 'deadline', 'link'] },
+        { name: 'sosobel_analytics', rows: 14050, lastUpdated: '2024-05-20 15:45', columns: ['event_id', 'user_id', 'action', 'timestamp'] }
+    ]);
 
-    const handleSaveDraft = (e: React.FormEvent) => {
-        e.preventDefault();
-        addToast("Draft saved successfully!", "success");
-        setDraftTitle('');
-        setDraftContent('');
+    useEffect(() => {
+        const timer = setTimeout(() => setMysqlStatus('Connected'), 2000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const sidebarItems: { id: DashboardView, labelKey: string, icon: React.ReactNode }[] = [
+        { id: 'dashboard', labelKey: 'dashboard.menu.dashboard', icon: <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /> },
+        { id: 'database', labelKey: 'dashboard.menu.database', icon: <path fillRule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3 2a1 1 0 00-1 1v1a1 1 0 001 1h1a1 1 0 001-1V8a1 1 0 00-1-1H5zm0 4a1 1 0 00-1 1v1a1 1 0 001 1h1a1 1 0 001-1v-1a1 1 0 00-1-1H5zm6-4a1 1 0 00-1 1v1a1 1 0 001 1h1a1 1 0 001-1V8a1 1 0 00-1-1h-1zm0 4a1 1 0 00-1 1v1a1 1 0 001 1h1a1 1 0 001-1v-1a1 1 0 00-1-1h-1z" clipRule="evenodd" /> },
+        { id: 'media', labelKey: 'dashboard.menu.media', icon: <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" /> },
+        { id: 'posts', labelKey: 'dashboard.menu.posts', icon: <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /> },
+        { id: 'pages', labelKey: 'dashboard.menu.pages', icon: <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" /> },
+        { id: 'comments', labelKey: 'dashboard.menu.comments', icon: <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /> },
+    ];
+
+    const isAIImage = (url: string) => url?.startsWith('data:');
+    const isUnsplash = (url: string) => url?.includes('unsplash.com');
+
+    const totalAssets = latestPosts.length + featuredProjects.length;
+    const synthesizedAssets = latestPosts.filter(p => isAIImage(p.img)).length + featuredProjects.filter(p => isAIImage(p.img)).length;
+    const completionPercentage = Math.round((synthesizedAssets / totalAssets) * 100);
+
+    const handleSyncAll = async () => {
+        setIsBulkGenerating(true);
+        addToast("Starting bulk AI synthesis loop...", "info");
+        
+        // Projects synchronization
+        for (let i = 0; i < featuredProjects.length; i++) {
+            if (isUnsplash(featuredProjects[i].img)) {
+                await onGenerateImage('project', i);
+            }
+        }
+        
+        // Posts synchronization
+        for (let i = 0; i < latestPosts.length; i++) {
+            if (isUnsplash(latestPosts[i].img)) {
+                await onGenerateImage('post', i);
+            }
+        }
+        
+        setIsBulkGenerating(false);
+        addToast("Asset synchronization complete!", "success");
     };
 
-    const sidebarItems: { id: DashboardView, labelKey: string, icon: React.ReactNode, isActive?: boolean }[] = [
-        { id: 'dashboard', labelKey: 'dashboard.menu.dashboard', icon: <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm3.707-10.707a1 1 0 00-1.414-1.414L9 8.586 7.707 7.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" /> },
-        { id: 'posts', labelKey: 'dashboard.menu.posts', icon: <path d="M15 8h2.003a2 2 0 011.995 2.152L18.72 18H5.28l-.278-7.848A2 2 0 016.997 8H9V6a3 3 0 016 0v2zm-2-2a1 1 0 00-2 0v2h2V6z" /> },
-        { id: 'media', labelKey: 'dashboard.menu.media', icon: <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" /> },
-        { id: 'pages', labelKey: 'dashboard.menu.pages', icon: <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" /> },
-        { id: 'comments', labelKey: 'dashboard.menu.comments', icon: <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /> },
-        { id: 'appearance', labelKey: 'dashboard.menu.appearance', icon: <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" /> },
-        { id: 'plugins', labelKey: 'dashboard.menu.plugins', icon: <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /> }, // Simplified icon
-        { id: 'users', labelKey: 'dashboard.menu.users', icon: <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" /> },
-        { id: 'tools', labelKey: 'dashboard.menu.tools', icon: <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4z" /> }, // Simplified icon
-        { id: 'settings', labelKey: 'dashboard.menu.settings', icon: <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /> },
-        { id: 'ai', labelKey: 'dashboard.menu.ai', icon: <path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /> }
-    ];
-
-    // Mock posts data based on user request
-    const mockPosts = [
-        { title: "Hello World!", author: "Admin", date: "2024/05/12", status: "Published" },
-        { title: "Sample Post 1", author: "Editor", date: "2024/05/10", status: "Published" },
-        { title: "Sample Post 2", author: "Editor", date: "2024/05/09", status: "Published" },
-        { title: "Sample Post 3", author: "Editor", date: "2024/05/08", status: "Published" },
-        { title: "Sample Post 4", author: "Editor", date: "2024/05/07", status: "Published" },
-        { title: "Sample Post 5", author: "Editor", date: "2024/05/06", status: "Published" },
-        { title: "Medical Supply Chains", author: "Dr. Reed", date: "2024/04/28", status: "Published" },
-        { title: "AI in Outbreaks", author: "Dr. Carter", date: "2024/04/15", status: "Published" },
-        { title: "Draft: New Policy", author: "Admin", date: "2024/05/13", status: "Draft" },
-        { title: "Ethical Tech", author: "Editor", date: "2024/03/10", status: "Published" },
-        { title: "Mobile Clinic Report", author: "Dr. Reed", date: "2024/02/20", status: "Published" },
-        { title: "Annual Summary", author: "Admin", date: "2024/01/01", status: "Published" },
-    ];
-
     return (
-        <div className={`flex h-screen bg-[#f0f0f1] font-sans text-[#1d2327] ${language === 'fa' || language === 'ar' ? 'font-vazir' : ''}`} dir={language === 'fa' || language === 'ar' ? 'rtl' : 'ltr'}>
-            {/* Left Sidebar */}
-            <div className="w-9 sm:w-40 md:w-48 bg-[#1d2327] flex-shrink-0 flex flex-col text-white transition-all overflow-y-auto z-50">
-                {/* Sidebar Header */}
-                <div className="h-12 flex items-center justify-center sm:justify-start sm:px-4 bg-[#000000]">
-                     <span className="hidden sm:inline font-bold text-sm">Dashboard</span>
+        <div className="flex min-h-screen bg-[#f1f1f1] text-[#3c434a]">
+            {/* Sidebar */}
+            <aside className="w-56 bg-[#1d2327] flex-shrink-0 text-gray-300 hidden lg:flex flex-col">
+                <div className="p-4 flex items-center gap-2 hover:bg-[#2c3338] cursor-pointer" onClick={() => setPage('home')}>
+                    <img src="https://i.sstatic.net/oTCIOZmA.png" alt="Logo" className="w-6 h-6 rounded" />
+                    <span className="font-bold text-sm tracking-tight">Civicavita AB</span>
                 </div>
-
-                {/* Menu Items */}
-                <nav className="flex-1 mt-2">
-                    <ul className="space-y-1">
-                        {sidebarItems.map(item => (
-                            <li key={item.id} className={`${currentView === item.id ? 'bg-[#2271b1] text-white' : 'hover:bg-[#2c3338] text-[#f0f0f1]'} transition-colors cursor-pointer`}>
-                                <button 
-                                    onClick={() => setCurrentView(item.id)}
-                                    className="flex items-center w-full px-3 py-2 text-sm focus:outline-none"
-                                >
-                                    <svg className={`w-5 h-5 ${language === 'fa' || language === 'ar' ? 'ml-3' : 'mr-3'} ${currentView === item.id ? 'opacity-100' : 'opacity-60'}`} fill="currentColor" viewBox="0 0 20 20">
-                                        {item.icon}
-                                    </svg>
-                                    <span className="hidden sm:inline">{t(item.labelKey)}</span>
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
+                <nav className="flex-grow py-2">
+                    {sidebarItems.map(item => (
+                        <button
+                            key={item.id}
+                            onClick={() => setCurrentView(item.id)}
+                            className={`w-full text-left flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-[#2c3338] hover:text-primary ${currentView === item.id ? 'bg-primary text-white border-l-4 border-white' : ''}`}
+                        >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">{item.icon}</svg>
+                            {t(item.labelKey)}
+                        </button>
+                    ))}
                 </nav>
-            </div>
+            </aside>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* Admin Top Bar */}
-                <header className="bg-[#1d2327] text-[#f0f0f1] h-8 flex items-center justify-between px-3 text-sm z-40">
-                    <div className="flex items-center space-x-4 rtl:space-x-reverse">
-                        <span className="font-bold font-serif w-6 flex items-center justify-center cursor-default text-lg pt-1">W</span>
-                        <button 
-                            onClick={() => setPage('home')}
-                            className="flex items-center hover:text-[#72aee6] transition-colors group"
-                        >
-                            <svg className="w-4 h-4 mr-1.5 rtl:ml-1.5 group-hover:text-[#72aee6]" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
-                            AURA AI
+            <main className="flex-grow flex flex-col overflow-hidden">
+                <header className="h-10 bg-[#1d2327] flex items-center justify-between px-4 text-xs text-gray-300">
+                    <div className="flex items-center gap-4">
+                        <button className="flex items-center gap-1 hover:text-white transition-colors" onClick={() => setPage('home')}>
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                            Visit Site
                         </button>
-                        <span className="hidden sm:flex items-center text-gray-400 hover:text-[#72aee6] cursor-pointer">
-                            <svg className="w-4 h-4 mx-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" /></svg>
-                            <span className="ml-1 rtl:mr-1">1</span>
-                        </span>
-                        <span className="hidden sm:inline hover:text-[#72aee6] cursor-pointer">+ New</span>
                     </div>
-                    <div className="flex items-center">
-                        <span className="mr-2 rtl:ml-2 text-gray-300">Howdy, Admin</span>
-                        <div className="w-6 h-6 bg-gray-600 rounded-sm"></div>
-                    </div>
+                    {completionPercentage < 100 && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase text-gray-500">Visual Sync: {completionPercentage}%</span>
+                            <div className="w-20 bg-gray-700 h-1 rounded-full overflow-hidden">
+                                <div className="bg-primary h-full transition-all duration-1000" style={{ width: `${completionPercentage}%` }}></div>
+                            </div>
+                        </div>
+                    )}
                 </header>
 
-                {/* Content Body */}
-                <main className="flex-1 overflow-auto p-4 sm:p-5 bg-[#f0f0f1]">
-                    
-                    {/* --- Dashboard View --- */}
-                    {currentView === 'dashboard' && (
-                        <>
-                            <h1 className="text-2xl font-medium text-[#1d2327] mb-6">{t('dashboard.menu.dashboard')}</h1>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                {/* At a Glance */}
-                                <div className="bg-white border border-[#c3c4c7] shadow-sm">
-                                    <div className="px-4 py-3 border-b border-[#c3c4c7] flex justify-between items-center">
-                                        <h2 className="font-semibold text-sm">At a Glance</h2>
-                                        <button className="text-[#2271b1] text-xs"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg></button>
-                                    </div>
-                                    <div className="p-4">
-                                        <div className="grid grid-cols-2 gap-4 text-sm text-[#50575e]">
-                                            <div className="flex items-center"><span className="text-[#2271b1] font-medium mr-1">{mockPosts.length}</span> Posts</div>
-                                            <div className="flex items-center"><span className="text-[#2271b1] font-medium mr-1">{featuredProjects.length}</span> Projects</div>
-                                            <div className="flex items-center"><span className="text-[#2271b1] font-medium mr-1">12</span> Comments</div>
-                                        </div>
-                                        <div className="mt-4 pt-4 border-t border-[#f0f0f1] text-sm text-[#50575e]">
-                                            <p>WordPress 6.4.2 running AURA AI Theme.</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Quick Draft */}
-                                <div className="bg-white border border-[#c3c4c7] shadow-sm">
-                                    <div className="px-4 py-3 border-b border-[#c3c4c7] flex justify-between items-center">
-                                        <h2 className="font-semibold text-sm">Quick Draft</h2>
-                                    </div>
-                                    <div className="p-4">
-                                        <form onSubmit={handleSaveDraft}>
-                                            <input type="text" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} className="w-full border border-[#8c8f94] p-1.5 text-sm mb-3 focus:border-[#2271b1] focus:ring-1 focus:ring-[#2271b1] outline-none" placeholder="Title" />
-                                            <textarea value={draftContent} onChange={(e) => setDraftContent(e.target.value)} className="w-full border border-[#8c8f94] p-1.5 text-sm mb-3 focus:border-[#2271b1] focus:ring-1 focus:ring-[#2271b1] outline-none resize-none" rows={3} placeholder="What's on your mind?"></textarea>
-                                            <button type="submit" className="bg-[#f6f7f7] text-[#2271b1] border border-[#2271b1] text-xs font-medium py-1.5 px-3 rounded hover:bg-[#f0f0f1]">Save Draft</button>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {/* --- Posts View --- */}
-                    {currentView === 'posts' && (
-                        <div>
-                            <div className="flex items-center justify-between mb-4">
-                                <h1 className="text-2xl font-medium text-[#1d2327]">
-                                    {t('dashboard.menu.posts')} 
-                                    <button className="ml-3 rtl:mr-3 text-sm px-2 py-1 border border-[#2271b1] text-[#2271b1] bg-[#f6f7f7] rounded hover:bg-[#2271b1] hover:text-white transition-colors">{t('dashboard.posts.addNew')}</button>
-                                </h1>
-                                <div className="flex space-x-2 rtl:space-x-reverse">
-                                    <button className="text-sm px-3 py-1 bg-white border border-[#c3c4c7] text-[#1d2327] rounded-t border-b-0">Screen Options</button>
-                                    <button className="text-sm px-3 py-1 bg-white border border-[#c3c4c7] text-[#1d2327] rounded-t border-b-0">Help</button>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row justify-between items-center mb-3 text-sm">
-                                <div className="flex space-x-1 rtl:space-x-reverse text-[#50575e]">
-                                    <a href="#" className="text-[#2271b1] font-semibold">{t('dashboard.posts.all')} <span className="text-[#50575e]">(12)</span></a>
-                                    <span className="text-[#c3c4c7]">|</span>
-                                    <a href="#" className="text-[#2271b1]">{t('dashboard.posts.published')} <span className="text-[#50575e]">(10)</span></a>
-                                </div>
-                                <div className="mt-2 sm:mt-0 flex">
-                                    <input type="text" className="border border-[#8c8f94] px-2 py-1 text-sm focus:border-[#2271b1] focus:ring-1 focus:ring-[#2271b1] outline-none" />
-                                    <button className="px-3 py-1 border border-[#2271b1] text-[#2271b1] bg-[#f6f7f7] text-sm hover:bg-[#f0f0f1] ml-1 rtl:mr-1">{t('dashboard.posts.search')}</button>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center space-x-2 rtl:space-x-reverse mb-3">
-                                <select className="border border-[#8c8f94] text-[#1d2327] text-sm px-2 py-1 bg-white rounded focus:border-[#2271b1] outline-none">
-                                    <option>{t('dashboard.posts.bulkActions')}</option>
-                                    <option>{t('dashboard.posts.actions.edit')}</option>
-                                    <option>{t('dashboard.posts.actions.trash')}</option>
-                                </select>
-                                <button className="px-3 py-1 border border-[#2271b1] text-[#2271b1] bg-[#f6f7f7] text-sm rounded hover:bg-[#f0f0f1]">{t('dashboard.posts.apply')}</button>
-                                
-                                <select className="border border-[#8c8f94] text-[#1d2327] text-sm px-2 py-1 bg-white rounded ml-4 rtl:mr-4 focus:border-[#2271b1] outline-none">
-                                    <option>{t('dashboard.posts.all')} Dates</option>
-                                </select>
-                                <select className="border border-[#8c8f94] text-[#1d2327] text-sm px-2 py-1 bg-white rounded focus:border-[#2271b1] outline-none">
-                                    <option>{t('dashboard.posts.all')} Categories</option>
-                                </select>
-                                <button className="px-3 py-1 border border-[#2271b1] text-[#2271b1] bg-[#f6f7f7] text-sm rounded hover:bg-[#f0f0f1]">{t('dashboard.posts.filter')}</button>
-                            </div>
-
-                            {/* Posts Table */}
-                            <div className="bg-white border border-[#c3c4c7] shadow-sm overflow-x-auto">
-                                <table className="w-full text-left rtl:text-right border-collapse">
-                                    <thead>
-                                        <tr className="bg-white border-b border-[#c3c4c7] text-sm font-medium text-[#1d2327]">
-                                            <th className="p-2 w-8"><input type="checkbox" className="border-gray-400 rounded-sm" /></th>
-                                            <th className="p-3 hover:text-[#2271b1] cursor-pointer">{t('dashboard.posts.table.title')}</th>
-                                            <th className="p-3 hover:text-[#2271b1] cursor-pointer">{t('dashboard.posts.table.author')}</th>
-                                            <th className="p-3 hover:text-[#2271b1] cursor-pointer">{t('dashboard.posts.table.categories')}</th>
-                                            <th className="p-3 hover:text-[#2271b1] cursor-pointer">{t('dashboard.posts.table.date')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-sm text-[#50575e]">
-                                        {mockPosts.map((post, i) => (
-                                            <tr key={i} className="bg-[#f6f7f7] odd:bg-white hover:bg-[#f0f6fc] group border-b border-[#c3c4c7] last:border-b-0">
-                                                <th className="p-2 w-8 text-center border-l-4 border-transparent"><input type="checkbox" className="border-gray-400 rounded-sm" /></th>
-                                                <td className="p-3 relative">
-                                                    <a href="#" className="font-semibold text-[#2271b1] hover:text-[#135e96] block mb-1 text-base">{post.title} {post.status === 'Draft' && <span className="text-[#50575e] font-normal italic">- Draft</span>}</a>
-                                                    <div className="invisible group-hover:visible text-xs flex space-x-1 rtl:space-x-reverse text-[#2271b1]">
-                                                        <a href="#" className="hover:text-[#135e96]">{t('dashboard.posts.actions.edit')}</a>
-                                                        <span className="text-[#c3c4c7]">|</span>
-                                                        <a href="#" className="hover:text-[#135e96]">{t('dashboard.posts.actions.quickEdit')}</a>
-                                                        <span className="text-[#c3c4c7]">|</span>
-                                                        <a href="#" className="text-[#b32d2e] hover:text-[#b32d2e] hover:underline">{t('dashboard.posts.actions.trash')}</a>
-                                                        <span className="text-[#c3c4c7]">|</span>
-                                                        <a href="#" className="hover:text-[#135e96]">{t('dashboard.posts.actions.view')}</a>
-                                                    </div>
-                                                </td>
-                                                <td className="p-3 text-[#2271b1]">{post.author}</td>
-                                                <td className="p-3 text-[#2271b1]">Uncategorized</td>
-                                                <td className="p-3">
-                                                    <div className="text-[#50575e]">{post.status}</div>
-                                                    <div className="text-xs">{post.date}</div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr className="bg-white border-t border-[#c3c4c7] text-sm font-medium text-[#1d2327]">
-                                            <th className="p-2 w-8"><input type="checkbox" className="border-gray-400 rounded-sm" /></th>
-                                            <th className="p-3">{t('dashboard.posts.table.title')}</th>
-                                            <th className="p-3">{t('dashboard.posts.table.author')}</th>
-                                            <th className="p-3">{t('dashboard.posts.table.categories')}</th>
-                                            <th className="p-3">{t('dashboard.posts.table.date')}</th>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                            
-                            <div className="mt-3 flex justify-between items-center text-sm text-[#50575e]">
-                                <div>12 items</div>
-                                <div className="flex space-x-1 rtl:space-x-reverse">
-                                    <button className="px-2 py-1 border border-[#c3c4c7] bg-[#f6f7f7] text-[#a7aaad] cursor-default rounded-sm" disabled>&laquo;</button>
-                                    <button className="px-2 py-1 border border-[#c3c4c7] bg-[#f6f7f7] text-[#a7aaad] cursor-default rounded-sm" disabled>&lsaquo;</button>
-                                    <div className="flex items-center px-1">
-                                        <span className="mr-1">1</span> of <span className="ml-1">1</span>
-                                    </div>
-                                    <button className="px-2 py-1 border border-[#c3c4c7] bg-[#f6f7f7] text-[#a7aaad] cursor-default rounded-sm" disabled>&rsaquo;</button>
-                                    <button className="px-2 py-1 border border-[#c3c4c7] bg-[#f6f7f7] text-[#a7aaad] cursor-default rounded-sm" disabled>&raquo;</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- AI Dashboard View --- */}
-                    {currentView === 'ai' && (
-                        <div className="bg-slate-900 rounded-lg -m-4 sm:-m-5 p-4 sm:p-5 min-h-full">
-                            <AIDashboard />
-                        </div>
-                    )}
-
-                    {/* --- Placeholder Views for others --- */}
-                    {!['dashboard', 'posts', 'ai'].includes(currentView) && (
-                        <div className="text-center py-20">
-                            <h2 className="text-2xl font-light text-[#50575e]">This section ({t(`dashboard.menu.${currentView}`)}) is under construction in this simulation.</h2>
-                        </div>
-                    )}
-
-                </main>
-                
-                {/* Admin Footer */}
-                <footer className="bg-[#f0f0f1] text-[#50575e] text-xs px-6 py-4 border-t border-[#dcdcde] flex justify-between">
-                    <div>
-                        Thank you for creating with <a href="#" className="text-[#2271b1] hover:underline">WordPress</a> (simulated).
+                <div className="flex-grow p-6 overflow-y-auto">
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-2xl font-normal">{t(`dashboard.menu.${currentView}`)}</h1>
+                        {currentView === 'media' && (
+                             <button 
+                                onClick={handleSyncAll}
+                                disabled={isBulkGenerating || completionPercentage === 100}
+                                className={`px-4 py-2 rounded text-sm font-bold text-white shadow-md transition-all ${isBulkGenerating || completionPercentage === 100 ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-primary-hover active:scale-95'}`}
+                             >
+                                {isBulkGenerating ? 'Processing AI Assets...' : completionPercentage === 100 ? 'All Assets Ready' : 'Synthesize Missing Assets'}
+                             </button>
+                        )}
                     </div>
-                    <div>Version 6.4.2</div>
-                </footer>
-            </div>
+
+                    {currentView === 'dashboard' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="col-span-full bg-white border border-[#ccd0d4] p-8 shadow-sm">
+                                <h2 className="text-xl font-normal mb-2">Welcome to your Sosobel MySQL Dashboard</h2>
+                                <p className="text-gray-500 mb-6">We've assembled some links to get you started:</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                                    <div>
+                                        <h3 className="font-bold mb-3">Get Started</h3>
+                                        <button onClick={() => setPage('generator')} className="bg-primary text-white px-4 py-2 rounded text-sm mb-4">Launch Doc Assistant</button>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold mb-3">Asset Monitor</h3>
+                                        <button onClick={() => setCurrentView('media')} className="bg-slate-700 text-white px-4 py-2 rounded text-sm">AI Image Manager</button>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold mb-3">Database Health</h3>
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <div className={`w-3 h-3 rounded-full ${mysqlStatus === 'Connected' ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+                                            <span>MySQL: {mysqlStatus}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {currentView === 'media' && (
+                        <div className="space-y-8 animate-fade-in">
+                            {/* Research Projects Images */}
+                            <section className="bg-white border border-[#ccd0d4] p-6 shadow-sm">
+                                <div className="flex justify-between items-center mb-6 border-b pb-4 border-[#f0f0f1]">
+                                    <h2 className="text-lg font-bold">Research Project Assets</h2>
+                                    <span className="text-xs text-gray-400">Total: {featuredProjects.length}</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {featuredProjects.map((project, idx) => (
+                                        <div key={idx} className="bg-[#f9f9f9] border border-[#dcdcde] rounded-lg overflow-hidden flex flex-col group">
+                                            <div className="aspect-video bg-slate-200 relative overflow-hidden flex items-center justify-center">
+                                                {project.isLoadingImage ? (
+                                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center z-10">
+                                                        <div className="w-8 h-8 border-4 border-dashed rounded-full animate-spin border-primary"></div>
+                                                    </div>
+                                                ) : null}
+                                                <img src={project.img} alt={project.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                                <div className="absolute top-2 right-2 flex flex-col gap-1">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase text-white shadow-sm ${isAIImage(project.img) ? 'bg-green-500' : 'bg-amber-500'}`}>
+                                                        {isAIImage(project.img) ? 'Synthesized' : 'Placeholder'}
+                                                    </span>
+                                                    {project.isGenerationFailed && (
+                                                        <span className="bg-red-500 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white shadow-sm">Sync Error</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="p-4 flex-grow flex flex-col">
+                                                <h3 className="text-sm font-bold text-[#1d2327] line-clamp-1">{project.title}</h3>
+                                                <div className="mt-4 pt-3 border-t border-[#dcdcde] flex justify-between items-center">
+                                                    <button 
+                                                        onClick={() => onGenerateImage('project', idx)}
+                                                        disabled={project.isLoadingImage}
+                                                        className={`text-xs font-bold transition-colors ${project.isLoadingImage ? 'text-gray-400' : 'text-primary hover:text-primary-hover'}`}
+                                                    >
+                                                        {project.isLoadingImage ? 'Working...' : project.isGenerationFailed ? 'Retry Sync' : 'Regenerate AI'}
+                                                    </button>
+                                                    <button className="text-xs text-gray-500 hover:text-[#1d2327]">Preview Card</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Blog Post Images */}
+                            <section className="bg-white border border-[#ccd0d4] p-6 shadow-sm">
+                                <div className="flex justify-between items-center mb-6 border-b pb-4 border-[#f0f0f1]">
+                                    <h2 className="text-lg font-bold">Insight Post Assets</h2>
+                                    <span className="text-xs text-gray-400">Total: {latestPosts.length}</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                                    {latestPosts.map((post, idx) => (
+                                        <div key={idx} className="bg-[#f9f9f9] border border-[#dcdcde] rounded-lg overflow-hidden flex flex-col group">
+                                            <div className="aspect-square bg-slate-200 relative overflow-hidden flex items-center justify-center">
+                                                {post.isLoadingImage ? (
+                                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center z-10">
+                                                        <div className="w-6 h-6 border-2 border-dashed rounded-full animate-spin border-primary"></div>
+                                                    </div>
+                                                ) : null}
+                                                <img src={post.img} alt={post.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                                <div className="absolute bottom-2 left-2">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase text-white shadow-sm ${isAIImage(post.img) ? 'bg-green-500' : 'bg-amber-500'}`}>
+                                                        {isAIImage(post.img) ? 'AI' : 'Stock'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="p-3">
+                                                <h3 className="text-xs font-bold text-[#1d2327] line-clamp-2 min-h-[2rem]">{post.title}</h3>
+                                                <button 
+                                                    onClick={() => onGenerateImage('post', idx)}
+                                                    disabled={post.isLoadingImage}
+                                                    className="mt-2 w-full text-[10px] uppercase font-black py-1.5 border border-primary text-primary rounded hover:bg-primary hover:text-white transition-colors disabled:border-gray-300 disabled:text-gray-300"
+                                                >
+                                                    {post.isLoadingImage ? 'Working...' : 'Synthesize'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+                    )}
+
+                    {currentView === 'database' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="bg-white border border-[#ccd0d4] p-6 shadow-sm">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-normal">{t('dashboard.database.title')}</h2>
+                                    <div className="flex items-center gap-4">
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${mysqlStatus === 'Connected' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                            {mysqlStatus === 'Connected' ? t('dashboard.database.connected') : t('dashboard.database.syncing')}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm border-collapse">
+                                        <thead className="bg-[#f6f7f7] border-y border-[#ccd0d4]">
+                                            <tr>
+                                                <th className="p-3 font-bold">Table Name</th>
+                                                <th className="p-3 font-bold">Total Rows</th>
+                                                <th className="p-3 font-bold">Last Sync</th>
+                                                <th className="p-3 font-bold">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[#f0f0f1]">
+                                            {sqlTables.map((table, i) => (
+                                                <tr key={i} className="hover:bg-[#f9f9f9] group">
+                                                    <td className="p-3 font-bold text-primary">{table.name}</td>
+                                                    <td className="p-3">{table.rows.toLocaleString()}</td>
+                                                    <td className="p-3 text-gray-400">{table.lastUpdated}</td>
+                                                    <td className="p-3">
+                                                        <div className="flex gap-2">
+                                                            <button className="text-primary hover:text-primary-hover">Browse</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </main>
         </div>
     );
 };

@@ -363,7 +363,7 @@ const ContentHubPage: React.FC<ContentHubPageProps> = ({
                                                 <p className="text-xs font-bold text-gray-400 uppercase">{t('contentHub.nextPost')}</p>
                                                 <p className="text-white font-medium mt-1">{publishingStrategy.nextPostIdea}</p>
                                                 <button onClick={() => {
-                                                    onGeneratePost(publishingStrategy.nextPostIdea, generatedPost.platform);
+                                                    onGeneratePost(publishingStrategy.nextPostIdea, generatedPost.platform as SocialPlatform);
                                                 }} className="mt-2 text-xs text-primary hover:underline font-semibold">
                                                     Generate this post &rarr;
                                                 </button>

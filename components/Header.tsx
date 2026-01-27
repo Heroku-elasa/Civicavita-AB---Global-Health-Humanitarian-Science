@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage, Page, LANGUAGES, useTheme, THEMES } from '../types';
 
@@ -30,6 +32,7 @@ const Header: React.FC<HeaderProps> = ({ setPage, currentPage }) => {
     { page: 'generator', labelKey: 'nav.reportGenerator' },
     { page: 'content-hub', labelKey: 'nav.contentHub' }, 
     { page: 'blog', labelKey: 'nav.blogGenerator' },
+    { page: 'media-archive', labelKey: 'nav.mediaArchive' },
     // { page: 'video', labelKey: 'nav.videoGenerator' }, // Hidden
     // { page: 'waste-to-wealth', labelKey: 'nav.wasteToWealth' }, // Hidden
     // { page: 'tree-planter', labelKey: 'nav.treePlanter' }, // Hidden
@@ -91,12 +94,11 @@ const Header: React.FC<HeaderProps> = ({ setPage, currentPage }) => {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <button onClick={() => setPage('home')} className="flex-shrink-0 flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-primary flex items-center justify-center bg-slate-800">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6 sm:w-7 sm:h-7 text-primary">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-              </div>
+              <img 
+                 src="https://i.sstatic.net/oTCIOZmA.png" 
+                 alt="Civicavita Logo" 
+                 className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-primary object-cover"
+              />
               <span className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                 Civicavita.<span className="text-orange-500">A</span><span className="text-emerald-500">B</span>
               </span>
